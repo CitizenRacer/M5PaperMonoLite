@@ -25,7 +25,9 @@ from esphome.const import (
 )
 from esphome.types import ConfigType
 
-AUTO_LOAD = ["epaper_spi"]
+# Importing EPaperBase directly does not execute epaper_spi's display-platform
+# AUTO_LOAD metadata. Keep its required split_buffer dependency explicit here.
+AUTO_LOAD = ["epaper_spi", "split_buffer"]
 DEPENDENCIES = ["spi"]
 
 from .. import m5papermono_lite_ns
