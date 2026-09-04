@@ -11,12 +11,9 @@ packages:
 
 logger:
 
-# Render ESPHome's built-in display test card for first hardware bring-up.
-display:
-  - id: m5_display
-    show_test_card: true
-
-# The package is hardware-only; add wifi/api/ota here for a real installation.
+# The hardware package defines the display, touchscreen, frontlight and battery
+# telemetry. Add an application display lambda/pages, Wi-Fi, API and OTA in the
+# consuming device configuration after the hardware bring-up has been verified.
 #
 # wifi:
 #   ssid: !secret wifi_ssid
