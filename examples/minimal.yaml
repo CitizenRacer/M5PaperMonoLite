@@ -11,6 +11,11 @@ packages:
 
 logger:
 
+# Render ESPHome's built-in display test card for first hardware bring-up.
+display:
+  - id: m5_display
+    show_test_card: true
+
 # The package is hardware-only; add wifi/api/ota here for a real installation.
 #
 # wifi:

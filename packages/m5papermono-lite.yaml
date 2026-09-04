@@ -88,9 +88,8 @@ light:
     restore_mode: RESTORE_DEFAULT_OFF
 
 display:
-  - platform: epaper_spi
+  - platform: m5papermono_lite
     id: m5_display
-    model: ssd1677
     spi_id: m5_epd_spi
     cs_pin: GPIO16
     dc_pin: GPIO17
@@ -112,9 +111,6 @@ display:
       number: 2
       mode:
         output: true
-    dimensions:
-      width: 800
-      height: 480
     rotation: 90
     update_interval: 60s
 

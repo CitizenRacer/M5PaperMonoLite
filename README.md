@@ -1,10 +1,11 @@
 # M5PaperMonoLite ESPHome support
 
-ESPHome hardware support for the **M5Stack M5PaperMono Lite (C153-LITE)**,
-built from the architecture of
+ESPHome hardware support for the **M5Stack M5PaperMono Lite (C153-LITE)**.
+The project uses
 [PFalko/m5stack-papercolor-esphome](https://github.com/PFalko/m5stack-papercolor-esphome)
-and adapted to the PaperMono hardware using M5Stack's current M5GFX,
-M5Unified, M5IOE1 and PaperMono reference implementations.
+as its architectural foundation, then adapts the power and display handling to
+the PaperMono hardware using M5Stack's current M5GFX, M5Unified, M5IOE1 and
+PaperMono reference implementations.
 
 ## Status
 
@@ -12,24 +13,29 @@ Initial bring-up support is implemented for the parts needed to use the device
 as an ESPHome touchscreen e-paper controller:
 
 - ESP32-S3, 16 MB flash, 8 MB octal PSRAM
-- SSD1677 800x480 e-paper through ESPHome `epaper_spi`
+- PaperMono-specific SSD1677 800x480 monochrome display driver
 - M5IOE1-controlled e-paper power and reset
-- FT6336G touch through ESPHome `ft5x06`
+- FT6336G touch through ESPHome's `ft5x06` driver
 - M5IOE1-controlled touch power and reset
 - M5PM1 initialization
 - frontlight brightness as a normal ESPHome monochromatic light
-- battery voltage telemetry
-- GitHub Actions compile validation
+- battery-voltage telemetry
+- GitHub Actions configuration/compile workflow
 
-The implementation intentionally uses ESPHome's native SSD1677 and FT5x06
-drivers rather than maintaining private display/touch drivers.
+The custom display platform inherits ESPHome's `EPaperMono` framebuffer, SPI
+transport, rotation handling, and update state machine. It overrides only the
+parts that are different on PaperMono: reversed gate/Y addressing, two-plane
+full-frame transfer, full-refresh control, analog power-down, and deep sleep.
 
-### Current limitation: grayscale
+### Deliberate first-bring-up limitations
 
-The panel supports four gray levels, but ESPHome's current SSD1677
-`EPaperMono` implementation is 1-bit. This package therefore renders
-black/white. M5Stack's official OTP demo and M5GFX contain the reference
-behavior needed for a future four-gray ESPHome enhancement.
+- **Monochrome only.** The panel supports four gray levels, but ESPHome's
+  current SSD1677 framebuffer is 1-bit. M5Stack's OTP demo and M5GFX provide
+  the reference behavior for a future four-gray implementation.
+- **Full refresh only.** M5Stack supports fast/partial refresh, but partial
+  refresh depends on retained SSD1677 RAM and different reset/waveform rules.
+  It is intentionally not enabled until the full-refresh path has been
+  validated on real C153-LITE hardware.
 
 ## Hardware mapping
 
@@ -52,9 +58,8 @@ behavior needed for a future four-gray ESPHome enhancement.
 | M5PM1 address | `0x6E` |
 | FT6336G address | `0x38` |
 
-M5Stack's M5IOE1 API names its pins from 1, while the ESPHome M5IOE1
-component uses zero-based pin numbers. The package performs that translation
-explicitly.
+M5Stack names M5IOE1 pins from 1, while the ESPHome M5IOE1 component uses
+zero-based pin numbers. The package performs that translation explicitly.
 
 ## Use it
 
@@ -88,7 +93,7 @@ The package exposes these useful IDs:
 
 | ID | Type |
 | --- | --- |
-| `m5_display` | ESPHome display |
+| `m5_display` | PaperMono display |
 | `m5_touch` | touchscreen |
 | `m5_frontlight` | light |
 | `m5_frontlight_output` | float output |
@@ -96,58 +101,74 @@ The package exposes these useful IDs:
 | `m5_pmic` | M5PM1 component |
 | `m5_ioe` | M5IOE1 hub |
 
-The display defaults to portrait orientation (logical 480x800). Override the
-package's `m5_display` item by ID in your device YAML when you add a display
-lambda/pages or change update behavior.
+The display defaults to portrait orientation (logical 480x800). Add a display
+lambda/pages by merging the `m5_display` item by ID in your device YAML.
 
-## Why there are two small custom components
+## Architecture
 
-`components/m5pm1_power` is derived from PFalko's PaperColor component but
-uses the **PaperMono** PMIC sequence. PaperColor routes e-paper power through
-M5PM1 GPIO0; PaperMono does not. On PaperMono, e-paper power/reset are on the
-M5IOE1. The PMIC component therefore limits itself to PMIC setup, frontlight,
+### `components/m5pm1_power`
+
+Derived from PFalko's MIT-licensed PaperColor component, but with the power
+sequence corrected for PaperMono. PaperColor routes e-paper power through
+M5PM1 GPIO0; PaperMono routes e-paper power/reset through M5IOE1. On
+PaperMono, M5PM1 is responsible here for PMIC setup, the GPIO3 frontlight PWM,
 battery telemetry, and system shutdown support.
 
-`components/m5papermono_lite` handles the sequencing ESPHome's FT5x06 driver
-cannot express: assert touch power through M5IOE1, pulse touch reset, then let
-the stock touchscreen driver initialize normally.
+The frontlight follows M5Stack's current implementation: 5 kHz PWM with the
+same gamma-squared brightness mapping used by M5GFX.
 
-Keeping these responsibilities separate also preserves startup ordering:
+### `components/m5papermono_lite`
+
+The board component handles the touch sequencing ESPHome's FT5x06 component
+cannot express: assert touch power through M5IOE1, pulse touch reset, then let
+the stock FT5x06 driver initialize.
+
+Its `display` platform subclasses ESPHome's `EPaperMono`. This is necessary
+because the generic ESPHome SSD1677 path is not sufficient for this panel:
+M5Stack's current PaperMono driver reverses the gate/Y direction and uses a
+different full-refresh/two-RAM-plane sequence.
+
+Startup ordering is intentional:
 
 1. ESPHome I2C bus starts.
 2. M5PM1 is configured.
 3. M5IOE1 starts.
 4. touch power/reset is sequenced.
-5. native ESPHome display and touchscreen drivers initialize.
+5. PaperMono display and FT6336G touchscreen initialize.
 
 ## Source references
 
-The implementation was checked against:
+Implementation was checked against:
 
-- PFalko's `m5stack-papercolor-esphome` project (MIT)
-- M5Stack `M5GFX` PaperMono board support (MIT)
-- M5Stack `M5Unified` PaperMono board support (MIT)
-- M5Stack `M5PaperMono-OTP-Demo` (MIT)
-- M5Stack `M5PaperMono-UserDemo` (MIT)
-- M5Stack's ESPHome `m5ioe1` external component
-- current ESPHome `epaper_spi` SSD1677 and `ft5x06` implementations
+- PFalko `m5stack-papercolor-esphome` (MIT)
+- M5Stack `M5GFX` PaperMono support
+- M5Stack `M5Unified` PaperMono support
+- M5Stack `M5PaperMono-OTP-Demo`
+- M5Stack `M5PaperMono-UserDemo`
+- M5Stack's ESPHome `m5ioe1` component
+- current ESPHome `epaper_spi` / `EPaperMono` and `ft5x06` implementations
 
 See [`NOTICE`](NOTICE) for attribution.
 
-## Next hardware-validation steps
+## Validation plan
 
-The current code is intended to compile before hardware arrives and to make
-first bring-up safe and observable. On real C153-LITE hardware, validate in
-this order:
+Before calling the hardware support production-ready, validate on a real
+C153-LITE in this order:
 
-1. boot log finds M5PM1 device ID `0x2050` and M5IOE1 `0x4F`;
+1. boot log finds M5PM1 device ID `0x2050` and M5IOE1 at `0x4F`;
 2. frontlight turns on/off and dims correctly;
-3. EPD performs a clean black/white full refresh;
+3. EPD produces a clean, correctly oriented black/white full refresh;
 4. touch coordinates match the 480x800 portrait display;
 5. battery voltage is plausible on USB and battery;
-6. exercise partial refresh and select an appropriate `full_update_every`;
-7. add PMIC power-button/shutdown/wake behavior;
-8. optionally add RTC, IMU and PDM microphone support.
+6. validate analog power-down and repeated wake/full-refresh cycles;
+7. implement and validate retained-RAM partial refresh;
+8. add four-gray mode if useful;
+9. optionally add RTC, IMU, microphone and PMIC power-button/wake features.
+
+## Build validation
+
+`.github/workflows/compile.yml` runs `esphome config` and `esphome compile`
+against `examples/minimal.yaml` on normal GitHub pushes and pull requests.
 
 ## License
 
