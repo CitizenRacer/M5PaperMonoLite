@@ -1,0 +1,137 @@
+# Hardware support package for M5Stack M5PaperMono Lite (C153-LITE).
+#
+# Physical display: 800x480 SSD1677
+# Logical default orientation: portrait, 480x800
+# Touch: FT6336G / FT5x06 family
+# Internal I2C: SDA GPIO47, SCL GPIO48
+# EPD SPI: MOSI 14, CLK 15, CS 16, DC 17, BUSY 18
+
+external_components:
+  - source:
+      type: git
+      url: https://github.com/m5stack/esphome-yaml
+      ref: main
+    components: [m5ioe1]
+    refresh: 1d
+  - source:
+      type: git
+      url: https://github.com/CitizenRacer/M5PaperMonoLite
+      ref: main
+    components:
+      - m5pm1_power
+      - m5papermono_lite
+    refresh: 1d
+
+esp32:
+  board: esp32-s3-devkitc-1
+  variant: ESP32S3
+  flash_size: 16MB
+  framework:
+    type: esp-idf
+
+psram:
+  mode: octal
+  speed: 80MHz
+
+# M5PM1, M5IOE1 and FT6336G share the internal bus. M5Stack initializes the
+# PMIC/IO expander at 100 kHz, so use the conservative common rate here.
+i2c:
+  - id: m5_internal_i2c
+    sda: GPIO47
+    scl: GPIO48
+    frequency: 100kHz
+    scan: false
+
+spi:
+  - id: m5_epd_spi
+    clk_pin: GPIO15
+    mosi_pin: GPIO14
+    interface: hardware
+
+m5ioe1:
+  id: m5_ioe
+  i2c_id: m5_internal_i2c
+  address: 0x4F
+  reset: true
+
+m5pm1_power:
+  id: m5_pmic
+  i2c_id: m5_internal_i2c
+  address: 0x6E
+  battery_voltage:
+    id: m5_battery_voltage
+    name: "Battery Voltage"
+
+m5papermono_lite:
+  id: m5_board
+  touch_power_pin:
+    m5ioe1_id: m5_ioe
+    number: 12
+    mode:
+      output: true
+  touch_reset_pin:
+    m5ioe1_id: m5_ioe
+    number: 5
+    mode:
+      output: true
+
+output:
+  - platform: m5pm1_power
+    id: m5_frontlight_output
+    m5pm1_power_id: m5_pmic
+
+light:
+  - platform: monochromatic
+    id: m5_frontlight
+    name: "Frontlight"
+    output: m5_frontlight_output
+    restore_mode: RESTORE_DEFAULT_OFF
+
+display:
+  - platform: epaper_spi
+    id: m5_display
+    model: ssd1677
+    spi_id: m5_epd_spi
+    cs_pin: GPIO16
+    dc_pin: GPIO17
+    busy_pin:
+      number: GPIO18
+      mode:
+        input: true
+        pullup: true
+    # M5IOE1 uses zero-based numbering:
+    # physical PIN5 (EPD reset) => number 4
+    reset_pin:
+      m5ioe1_id: m5_ioe
+      number: 4
+      mode:
+        output: true
+    # physical PIN3 (EPD power enable) => number 2
+    enable_pin:
+      m5ioe1_id: m5_ioe
+      number: 2
+      mode:
+        output: true
+    dimensions:
+      width: 800
+      height: 480
+    rotation: 90
+    update_interval: 60s
+
+touchscreen:
+  - platform: ft5x06
+    id: m5_touch
+    display: m5_display
+    i2c_id: m5_internal_i2c
+    address: 0x38
+    interrupt_pin:
+      number: GPIO4
+      mode:
+        input: true
+        pullup: true
+    # M5GFX reports the PaperMono touch surface as native portrait coordinates.
+    calibration:
+      x_min: 0
+      x_max: 479
+      y_min: 0
+      y_max: 799

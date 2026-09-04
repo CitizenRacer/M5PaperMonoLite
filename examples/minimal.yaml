@@ -1,0 +1,22 @@
+esphome:
+  name: m5papermono-lite-test
+  friendly_name: M5PaperMono Lite Test
+
+packages:
+  m5papermono_lite:
+    url: https://github.com/CitizenRacer/M5PaperMonoLite
+    ref: main
+    file: packages/m5papermono-lite.yaml
+    refresh: 1d
+
+logger:
+
+# The package is hardware-only; add wifi/api/ota here for a real installation.
+#
+# wifi:
+#   ssid: !secret wifi_ssid
+#   password: !secret wifi_password
+#
+# api:
+# ota:
+#   - platform: esphome

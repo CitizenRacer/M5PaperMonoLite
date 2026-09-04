@@ -1,0 +1,16 @@
+M5PaperMonoLite ESPHome support
+
+Portions of components/m5pm1_power are derived from PFalko's
+m5stack-papercolor-esphome project:
+https://github.com/PFalko/m5stack-papercolor-esphome
+
+Original work:
+  Copyright (c) 2026 PFalko
+  Licensed under the MIT License.
+
+The M5PaperMono-specific PMIC register sequence and frontlight behavior are
+based on M5Stack's MIT-licensed M5GFX/M5Unified implementations and official
+M5PaperMono examples.
+
+M5Stack, M5PaperMono, ESPHome, and other marks belong to their respective
+owners.
